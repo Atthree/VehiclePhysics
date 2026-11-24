@@ -154,6 +154,7 @@ namespace Atthree.Vehicles.Tests
 
             // Tümsek, hız kesici ve çukur bölgelerinin hepsinden geç (z 30 -> 150).
             car.commands.throttle = 0.7f;
+            float timeout = Time.time + 60f;
             while (car.transform.position.z < 155f)
             {
                 // Pistin ortasında kal: basit direksiyon düzeltmesi.
@@ -171,7 +172,7 @@ namespace Atthree.Vehicles.Tests
                     bodyMinY = Mathf.Min(bodyMinY, car.transform.position.y);
                     bodyMaxY = Mathf.Max(bodyMaxY, car.transform.position.y);
                 }
-                if (Time.time > 60f) Assert.Fail("pisti 60 sn'de geçemedi, z=" + z);
+                if (Time.time > timeout) Assert.Fail("pisti 60 sn'de geçemedi, z=" + z);
             }
             float tilt = Mathf.Acos(Mathf.Clamp01(minUpright)) * Mathf.Rad2Deg;
             Debug.Log($"[Vehicle] bumps: compression range {minComp:F2}..{maxComp:F2} maxTilt={tilt:F1}° airborne={airborneTime:F2}s bodyY {bodyMinY:F2}..{bodyMaxY:F2} x={car.transform.position.x:F1}");

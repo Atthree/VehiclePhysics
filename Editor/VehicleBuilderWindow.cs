@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -5,40 +6,43 @@ namespace Atthree.Vehicles.Editor
 {
     /// <summary>
     /// Kendi araba modelini sürülebilir yap: Tools > Vehicle Physics > Builder.
-    /// Aracın kökünü ve dört tekerlek mesh'ini sürükle, Build'e bas.
+    /// Aracın kökünü ve dört tekerlek mesh'ini sürükle, bir profil seç, Build'e bas.
     /// </summary>
     public class VehicleBuilderWindow : EditorWindow
     {
         GameObject root;
         Transform frontLeft, frontRight, rearLeft, rearRight;
-        readonly VehicleSetup.Options options = new VehicleSetup.Options();
+        int presetIndex;
+        VehiclePreset customPreset;
+        bool addPlayerInput = true, addHud = true, setupCamera = true;
         Vector2 scroll;
 
         [MenuItem("Tools/Vehicle Physics/Builder (Your Own Model)", priority = 20)]
         static void Open()
         {
             var w = GetWindow<VehicleBuilderWindow>("Vehicle Builder");
-            w.minSize = new Vector2(340, 420);
-            if (Selection.activeGameObject != null) w.root = Selection.activeGameObject;
-            w.TryAutoFindWheels();
+            w.minSize = new Vector2(360, 460);
+            if (Selection.activeGameObject != null) w.SetRoot(Selection.activeGameObject);
+        }
+
+        void SetRoot(GameObject value)
+        {
+            root = value;
+            frontLeft = frontRight = rearLeft = rearRight = null;
+            if (root != null) VehicleSetup.FindWheels(root, out frontLeft, out frontRight, out rearLeft, out rearRight);
         }
 
         void OnGUI()
         {
             scroll = EditorGUILayout.BeginScrollView(scroll);
             EditorGUILayout.HelpBox(
-                "1) Arabayı sahneye koy: ileri yönü mavi ok (+Z), tekerlekler yerde.\n" +
-                "2) Kökü ve dört tekerlek mesh'ini aşağıya sürükle.\n" +
-                "3) Build. Play: WASD sür, Space el freni, R düzelt.",
+                "1) Arabayı sahneye koy: önü mavi oka (+Z) baksın, tekerlekler yerde.\n" +
+                "2) Kökü sürükle; tekerlekler isimden bulunamazsa elle ata.\n" +
+                "3) Profil seç, Build. Play: WASD sür, Space el freni, R düzelt.",
                 MessageType.Info);
 
-            EditorGUI.BeginChangeCheck();
-            root = (GameObject)EditorGUILayout.ObjectField("Araç Kökü", root, typeof(GameObject), true);
-            if (EditorGUI.EndChangeCheck())
-            {
-                frontLeft = frontRight = rearLeft = rearRight = null; // yeni araç: eski atamaları unut
-                TryAutoFindWheels();
-            }
+            var newRoot = (GameObject)EditorGUILayout.ObjectField("Araç Kökü", root, typeof(GameObject), true);
+            if (newRoot != root) SetRoot(newRoot);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Tekerlek Mesh'leri", EditorStyles.boldLabel);
@@ -46,43 +50,59 @@ namespace Atthree.Vehicles.Editor
             frontRight = (Transform)EditorGUILayout.ObjectField("Ön Sağ", frontRight, typeof(Transform), true);
             rearLeft = (Transform)EditorGUILayout.ObjectField("Arka Sol", rearLeft, typeof(Transform), true);
             rearRight = (Transform)EditorGUILayout.ObjectField("Arka Sağ", rearRight, typeof(Transform), true);
-            if (root != null && GUILayout.Button("Tekerlekleri isimden bul")) TryAutoFindWheels();
+            if (root != null && GUILayout.Button("Tekerlekleri isimden tekrar bul")) SetRoot(root);
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Ayarlar", EditorStyles.boldLabel);
-            options.mass = EditorGUILayout.FloatField("Kütle (kg)", options.mass);
-            options.suspensionLength = EditorGUILayout.FloatField("Süspansiyon Boyu (m)", options.suspensionLength);
-            options.springStiffness = EditorGUILayout.FloatField("Yay Sertliği (N/m)", options.springStiffness);
-            options.bumpDamper = EditorGUILayout.FloatField("Amortisör: Sıkışma", options.bumpDamper);
-            options.reboundDamper = EditorGUILayout.FloatField("Amortisör: Açılma", options.reboundDamper);
-            options.frontWheelDrive = EditorGUILayout.Toggle("Önden Çekiş", options.frontWheelDrive);
-            options.rearWheelDrive = EditorGUILayout.Toggle("Arkadan İtiş", options.rearWheelDrive);
-            options.addPlayerInput = EditorGUILayout.Toggle("Oyuncu Girdisi Ekle", options.addPlayerInput);
-            options.addHud = EditorGUILayout.Toggle("Gösterge (HUD) Ekle", options.addHud);
-            bool setupCamera = EditorPrefs.GetBool("Atthree.Vehicles.SetupCamera", true);
+            EditorGUILayout.LabelField("Profil", EditorStyles.boldLabel);
+            presetIndex = EditorGUILayout.Popup("Hazır Profil", presetIndex, VehiclePreset.BuiltInNames);
+            customPreset = (VehiclePreset)EditorGUILayout.ObjectField(
+                new GUIContent("Kendi Profilin", "Doluysa hazır profil yerine bu kullanılır.\nCreate > Vehicle Physics > Vehicle Preset"),
+                customPreset, typeof(VehiclePreset), false);
+
+            EditorGUILayout.Space();
+            addPlayerInput = EditorGUILayout.Toggle("Oyuncu Girdisi Ekle", addPlayerInput);
+            addHud = EditorGUILayout.Toggle("Gösterge (HUD) Ekle", addHud);
             setupCamera = EditorGUILayout.Toggle("Kamerayı Kur", setupCamera);
-            EditorPrefs.SetBool("Atthree.Vehicles.SetupCamera", setupCamera);
 
             string error = Validate();
             if (error != null) EditorGUILayout.HelpBox(error, MessageType.Warning);
+            string warning = ForwardWarning();
+            if (warning != null) EditorGUILayout.HelpBox(warning, MessageType.Warning);
 
             EditorGUILayout.Space();
             using (new EditorGUI.DisabledScope(error != null))
             {
-                if (GUILayout.Button("Build", GUILayout.Height(32)))
-                {
-                    Undo.RegisterFullObjectHierarchyUndo(root, "Build Vehicle");
-                    var vehicle = VehicleSetup.Setup(root, frontLeft, frontRight, rearLeft, rearRight, options);
-                    // Yeni eklenen bileşen ve objeler için:
-                    foreach (var w in root.GetComponentsInChildren<VehicleWheel>())
-                        Undo.RegisterCreatedObjectUndo(w.gameObject, "Build Vehicle");
-                    if (setupCamera) VehicleSetup.SetupCamera(vehicle);
-                    EditorUtility.SetDirty(root);
-                    Selection.activeGameObject = root;
-                    Debug.Log($"[Vehicle Builder] '{root.name}' sürülebilir hale getirildi.", root);
-                }
+                if (GUILayout.Button("Build", GUILayout.Height(32))) Build();
             }
             EditorGUILayout.EndScrollView();
+        }
+
+        void Build()
+        {
+            Undo.SetCurrentGroupName("Build Vehicle");
+            int group = Undo.GetCurrentGroup();
+            Undo.RegisterFullObjectHierarchyUndo(root, "Build Vehicle");
+
+            var created = new List<GameObject>();
+            var options = new VehicleSetup.Options
+            {
+                preset = customPreset != null ? customPreset : VehiclePreset.BuiltIn(presetIndex),
+                addPlayerInput = addPlayerInput,
+                addHud = addHud,
+            };
+            var vehicle = VehicleSetup.Setup(root, frontLeft, frontRight, rearLeft, rearRight, options, created);
+            foreach (var go in created) Undo.RegisterCreatedObjectUndo(go, "Build Vehicle");
+
+            if (setupCamera)
+            {
+                if (Camera.main != null) Undo.RegisterFullObjectHierarchyUndo(Camera.main.gameObject, "Setup Camera");
+                VehicleSetup.SetupCamera(vehicle);
+            }
+
+            Undo.CollapseUndoOperations(group);
+            EditorUtility.SetDirty(root);
+            Selection.activeGameObject = root;
+            Debug.Log($"[Vehicle Builder] '{root.name}' sürülebilir hale getirildi ({options.preset.name} profili).", root);
         }
 
         string Validate()
@@ -92,31 +112,23 @@ namespace Atthree.Vehicles.Editor
             if (frontLeft == null || frontRight == null || rearLeft == null || rearRight == null)
                 return "Dört tekerleği de ata.";
             foreach (var t in new[] { frontLeft, frontRight, rearLeft, rearRight })
-                if (!t.IsChildOf(root.transform)) return $"'{t.name}' aracın altında değil.";
+                if (!t.IsChildOf(root.transform) || t == root.transform) return $"'{t.name}' aracın altında bir obje olmalı.";
             return null;
         }
 
-        /// <summary>Yaygın isimlerden tekerlekleri bulmaya çalışır (FL, Wheel_FL, FrontLeft...).</summary>
-        void TryAutoFindWheels()
+        /// <summary>Ön tekerlekler kökün +Z yönünde değilse model yanlış yöne bakıyordur.</summary>
+        string ForwardWarning()
         {
-            if (root == null) return;
-            var all = root.GetComponentsInChildren<Transform>(true);
-            frontLeft ??= Find(all, "fl", "frontleft", "front_left", "wheel_fl", "wheelfl", "lf", "wheel_front_left");
-            frontRight ??= Find(all, "fr", "frontright", "front_right", "wheel_fr", "wheelfr", "rf", "wheel_front_right");
-            rearLeft ??= Find(all, "rl", "rearleft", "rear_left", "wheel_rl", "wheelrl", "lr", "backleft", "wheel_rear_left");
-            rearRight ??= Find(all, "rr", "rearright", "rear_right", "wheel_rr", "wheelrr", "backright", "wheel_rear_right");
-        }
-
-        static Transform Find(Transform[] all, params string[] keys)
-        {
-            foreach (var t in all)
-            {
-                string n = t.name.ToLowerInvariant().Replace(" ", "").Replace("-", "_");
-                foreach (var k in keys)
-                    if (n == k || n.EndsWith("_" + k) || n.EndsWith(k) && n.Contains("wheel"))
-                        return t;
-            }
-            return null;
+            if (root == null || frontLeft == null || frontRight == null || rearLeft == null || rearRight == null) return null;
+            Vector3 front = (frontLeft.GetComponentInChildren<Renderer>()?.bounds.center ?? frontLeft.position)
+                          + (frontRight.GetComponentInChildren<Renderer>()?.bounds.center ?? frontRight.position);
+            Vector3 rear = (rearLeft.GetComponentInChildren<Renderer>()?.bounds.center ?? rearLeft.position)
+                         + (rearRight.GetComponentInChildren<Renderer>()?.bounds.center ?? rearRight.position);
+            Vector3 dir = root.transform.InverseTransformDirection((front - rear).normalized);
+            if (dir.z > 0.9f) return null;
+            return "Ön tekerlekler aracın ileri yönünde (+Z, mavi ok) değil: araç yanlış yöne bakıyor.\n" +
+                   "Çözüm: boş bir GameObject oluştur, modeli onun altına koy ve modeli önü mavi oka bakacak şekilde " +
+                   "döndür. Sonra boş objeyi 'Araç Kökü' olarak kullan.";
         }
     }
 }

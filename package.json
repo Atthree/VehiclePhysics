@@ -10,11 +10,23 @@
   },
   "license": "MIT",
   "keywords": [
-    "vehicle",
-    "car",
-    "physics",
+    "unity",
+    "unity3d",
+    "unity6",
+    "upm",
+    "upm-package",
+    "unity-package",
+    "gamedev",
+    "vehicle-physics",
+    "car-physics",
+    "car-controller",
+    "vehicle-controller",
+    "raycast-vehicle",
     "suspension",
-    "raycast"
+    "drift",
+    "racing-game",
+    "physics",
+    "unity-physics"
   ],
   "dependencies": {
     "com.unity.inputsystem": "1.7.0",

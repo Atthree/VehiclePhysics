@@ -1,0 +1,14 @@
+{
+  "name": "com.atthree.vehicle-physics",
+  "version": "0.1.0",
+  "displayName": "Vehicle Physics",
+  "description": "Raycast-based car physics for Unity 6: spring/damper suspension, tire grip, steering, handbrake, anti-roll bars, chase camera.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Atthree",
+    "url": "https://github.com/Atthree"
+  },
+  "license": "MIT",
+  "keywords": [],
+  "dependencies": {}
+}

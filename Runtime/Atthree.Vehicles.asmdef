@@ -1,7 +1,9 @@
 {
     "name": "Atthree.Vehicles",
     "rootNamespace": "Atthree.Vehicles",
-    "references": [],
+    "references": [
+        "Unity.InputSystem"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

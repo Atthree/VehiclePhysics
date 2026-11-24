@@ -9,6 +9,15 @@
     "url": "https://github.com/Atthree"
   },
   "license": "MIT",
-  "keywords": [],
-  "dependencies": {}
+  "keywords": [
+    "vehicle",
+    "car",
+    "physics",
+    "suspension",
+    "raycast"
+  ],
+  "dependencies": {
+    "com.unity.inputsystem": "1.7.0",
+    "com.unity.modules.physics": "1.0.0"
+  }
 }

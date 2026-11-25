@@ -447,3 +447,8 @@ sonra **Window > General > Test Runner > PlayMode**.
 ## Lisans
 
 [MIT](LICENSE.md)
+
+---
+
+🤖 *This project was developed with the help of AI tools.*  
+🤖 *Bu proje yapay zekâ araçlarının yardımıyla geliştirilmiştir.*
